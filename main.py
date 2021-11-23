@@ -245,14 +245,13 @@ def connectorPlugins(workerName,port):
         client.close()
         return JSONResponse(status_code=500)
 
-@app.get("/api/startConnector/{workerName}/{port}")
-#@app.post("/{worker_name}/{port}/start-connector")
-async def startWorker(workerName,port,request: Request):
+@app.post("/api/start/{workerName}")
+async def startWorker(workerName,request: Request):
     try:
-        #payload = await request.json()
+        payload = await request.json()
        
         c=ssh_conn(workerName)
-        command = "/opt/luca/connect_common/connect_common6.1test/bin/manageworker.sh start"
+        command = "{}/bin/manageworker.sh start".format(payload["path"])
         stdin, stdout, stderr = c.exec_command(command,3)
         output=stdout.read()
         err=stderr.read()
@@ -262,18 +261,44 @@ async def startWorker(workerName,port,request: Request):
         client.close()
 
         # Print output of command. Will wait for command to finish.
-        return payload
+        if err =="":
+            return {"data":"worker started successfully"}
+        else:
+            return {"data":"worker failed to start"+err}
+        
     except Exception as err:
         client.close()
 
+@app.post("/api/stop/{workerName}")
+async def startWorker(workerName,request: Request):
+    try:
+        payload = await request.json()
+       
+        c=ssh_conn(workerName)
+        command = "{}/bin/manageworker.sh stop".format(payload["path"])
+        stdin, stdout, stderr = c.exec_command(command,3)
+        output=stdout.read()
+        err=stderr.read()
+        time.sleep(1)
+        res = json.loads(output.decode("utf8"))
+
+        client.close()
+
+        # Print output of command. Will wait for command to finish.
+        if err =="":
+            return {"data":"worker stoped successfully"}
+        else:
+            return {"data":"worker failed to stop"+err}
+        
+    except Exception as err:
+        client.close()
 @app.post("/api/{workerName}/{port}")
 async def workerStatus(workerName,port,request:Request):
     try:
         status = ""
         payload = await request.json()
         c=ssh_conn(workerName)
-        command = "{}/manageworker.sh status".format(payload["path"])
-        print(command)
+        command = "{}/bin/manageworker.sh status".format(payload["path"])
         stdin, stdout, stderr = c.exec_command(command,3)
         output=stdout.read()
         if 'Kafka Worker is running' in str(output):
@@ -285,6 +310,28 @@ async def workerStatus(workerName,port,request:Request):
         client.close()
         # Print output of command. Will wait for command to finish.
         return {"status":status}
+    except Exception as err:
+        client.close()
+
+@app.post("/api/{workerName}/{port}/info")
+async def workerInfo(workerName,port,request:Request):
+    try:
+        respDict = {}
+        payload = await request.json()
+        c=ssh_conn(workerName)
+        command1 = "cat {}/config/worker.properties".format(payload["path"])
+        stdin, stdout, stderr = c.exec_command(command1,3)
+        output1=stdout.read()
+        respDict['WorkerProperties'] = output1
+        command2 = "cat {}/logs/connect.log".format(payload["path"])
+        stdin, stdout, stderr = c.exec_command(command2,3)
+        output2=stdout.read()
+        respDict['errorLog'] = output2
+        err=stderr.read()
+        time.sleep(1)
+        client.close()
+        # Print output of command. Will wait for command to finish.
+        return respDict
     except Exception as err:
         client.close()
         
